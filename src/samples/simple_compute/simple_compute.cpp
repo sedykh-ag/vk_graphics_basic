@@ -1,8 +1,15 @@
 #include "simple_compute.h"
-
+#include <chrono>
 #include <vk_pipeline.h>
 #include <vk_buffers.h>
 #include <vk_utils.h>
+
+const unsigned int WORKGROUP_SIZE = 1024;
+
+float generate_random_float(float low, float high)
+{
+  return low + (float)rand() / (float)(RAND_MAX / (high-low)); 
+}
 
 SimpleCompute::SimpleCompute(uint32_t a_length) : m_length(a_length)
 {
@@ -11,6 +18,13 @@ SimpleCompute::SimpleCompute(uint32_t a_length) : m_length(a_length)
 #else
   m_enableValidation = true;
 #endif
+
+  // fill random values
+  m_values.resize(m_length);
+  srand(time(NULL));
+  for (uint32_t i = 0; i < m_values.size(); ++i) {
+    m_values[i] = generate_random_float(0.f, 10.f);
+  }
 }
 
 void SimpleCompute::SetupValidationLayers()
@@ -95,15 +109,8 @@ void SimpleCompute::SetupSimplePipeline()
   m_pBindings->BindEnd(&m_sumDS, &m_sumDSLayout);
 
   // Заполнение буферов
-  std::vector<float> values(m_length);
-  for (uint32_t i = 0; i < values.size(); ++i) {
-    values[i] = (float)i;
-  }
-  m_pCopyHelper->UpdateBuffer(m_A, 0, values.data(), sizeof(float) * values.size());
-  for (uint32_t i = 0; i < values.size(); ++i) {
-    values[i] = (float)i * i;
-  }
-  m_pCopyHelper->UpdateBuffer(m_B, 0, values.data(), sizeof(float) * values.size());
+  m_pCopyHelper->UpdateBuffer(m_A, 0, m_values.data(), sizeof(float) * m_values.size());
+  m_pCopyHelper->UpdateBuffer(m_B, 0, m_values.data(), sizeof(float) * m_values.size());
 }
 
 void SimpleCompute::BuildCommandBufferSimple(VkCommandBuffer a_cmdBuff, VkPipeline)
@@ -122,7 +129,7 @@ void SimpleCompute::BuildCommandBufferSimple(VkCommandBuffer a_cmdBuff, VkPipeli
 
   vkCmdPushConstants(a_cmdBuff, m_layout, VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(m_length), &m_length);
 
-  vkCmdDispatch(a_cmdBuff, 1, 1, 1);
+  vkCmdDispatch(a_cmdBuff, WORKGROUP_SIZE, 1, 1);
 
   VK_CHECK_RESULT(vkEndCommandBuffer(a_cmdBuff));
 }
@@ -158,7 +165,7 @@ void SimpleCompute::Cleanup()
 void SimpleCompute::CreateComputePipeline()
 {
   // Загружаем шейдер
-  std::vector<uint32_t> code = vk_utils::readSPVFile("../resources/shaders/simple.comp.spv");
+  std::vector<uint32_t> code = vk_utils::readSPVFile("../resources/shaders/simple.comp.spv"); // modified path due to Debug subfolder in bin folder
   VkShaderModuleCreateInfo createInfo = {};
   createInfo.sType    = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
   createInfo.pCode    = code.data();
@@ -202,6 +209,8 @@ void SimpleCompute::CreateComputePipeline()
 
 void SimpleCompute::Execute()
 {
+  auto t_0 = std::chrono::high_resolution_clock::now();
+
   SetupSimplePipeline();
   CreateComputePipeline();
 
@@ -225,7 +234,42 @@ void SimpleCompute::Execute()
 
   std::vector<float> values(m_length);
   m_pCopyHelper->ReadBuffer(m_sum, 0, values.data(), sizeof(float) * values.size());
+  float resultSum = 0.f;
   for (auto v: values) {
-    std::cout << v << ' ';
+    resultSum += v;
   }
+  auto t_1 = std::chrono::high_resolution_clock::now();
+  auto dt = std::chrono::duration_cast<std::chrono::milliseconds>(t_1 - t_0);
+
+  std::cout << "Result sum on GPU: " << resultSum << '\n';
+  std::cout << "GPU execution time: " << dt.count() << " milliseconds \n";
+
+  
+  // Perform the same on CPU
+  std::vector<float> A(m_length + 6); // explicitly add leading and trailing zeros
+  A[0], A[1], A[2] = 0.f, 0.f, 0.f;
+  A[m_length-1], A[m_length-2], A[m_length-3] = 0.f, 0.f, 0.f;
+  for (int i = 0; i < m_values.size(); i++)
+    A[i+3] = m_values[i];
+
+  std::vector<float> B(m_length);
+  std::vector<float> sum(m_length);
+  const float F = 1.f / 7.f;
+
+  t_0 = std::chrono::high_resolution_clock::now();
+  for (int i = 0; i < sum.size(); i++)
+  {
+    B[i] = A[i]*F + A[i+1]*F + A[i+2]*F + A[i+3]*F + A[i+4]*F + A[i+5]*F + A[i+6]*F;
+    sum[i] = A[i+3] - B[i];
+    //sum[i] = A[i+3];
+  }
+  resultSum = 0.f;
+  for (auto v: sum)
+    resultSum += v;
+  t_1 = std::chrono::high_resolution_clock::now();
+  dt = std::chrono::duration_cast<std::chrono::milliseconds>(t_1 - t_0);
+
+  std::cout << "Result sum on CPU: " << resultSum << '\n';
+  std::cout << "CPU execution time: " << dt.count() << " milliseconds \n";
+  
 }
