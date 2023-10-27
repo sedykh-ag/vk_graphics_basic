@@ -165,7 +165,7 @@ void SimpleCompute::Cleanup()
 void SimpleCompute::CreateComputePipeline()
 {
   // Загружаем шейдер
-  std::vector<uint32_t> code = vk_utils::readSPVFile("../resources/shaders/simple.comp.spv"); // modified path due to Debug subfolder in bin folder
+  std::vector<uint32_t> code = vk_utils::readSPVFile("../resources/shaders/simple.comp.spv");
   VkShaderModuleCreateInfo createInfo = {};
   createInfo.sType    = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
   createInfo.pCode    = code.data();
