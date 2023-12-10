@@ -51,6 +51,7 @@ private:
   etna::Image postProcImage;
   etna::Sampler defaultSampler;
   etna::Buffer constants;
+  etna::Buffer gauss_coeffs;
 
   VkCommandPool    m_commandPool    = VK_NULL_HANDLE;
 
@@ -76,6 +77,7 @@ private:
 
   UniformParams m_uniforms {};
   void* m_uboMappedMem = nullptr;
+  void* m_gaussCoeffsMappedMem = nullptr;
 
   etna::GraphicsPipeline m_basicForwardPipeline {};
   etna::GraphicsPipeline m_shadowPipeline {};

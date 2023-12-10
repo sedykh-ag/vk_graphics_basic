@@ -10,6 +10,12 @@ layout(local_size_x = WORKGROUP_SIZE, local_size_y = WORKGROUP_SIZE) in;
 layout(rgba8, binding = 0) uniform restrict readonly image2D inputImage;
 layout(rgba8, binding = 1) uniform restrict writeonly image2D outputImage;
 
+layout(std140, binding = 2) uniform GaussUBO_t
+{
+    float coeffs[KERNEL_SIZE];
+} ubo;
+
+
 shared vec4 shared_pixels[SHARED_WINDOW_SIZE][SHARED_WINDOW_SIZE];
 
 

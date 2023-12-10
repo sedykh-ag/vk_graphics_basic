@@ -10,6 +10,26 @@
 #include <etna/RenderTargetStates.hpp>
 #include <vulkan/vulkan_core.h>
 
+#include <cmath>
+#include <vector>
+
+float gauss_distr(float x, float sigma)
+{
+  return exp(-x*x / (2 * sigma * sigma)) / sqrt(2 * LiteMath::M_PI);
+}
+
+// generate gauss coeffs
+std::vector<float> get_gauss_coeffs(int kernel_size) {
+  int N = 2 * kernel_size - 1;
+  
+  std::vector<float> coefs(N);
+
+  for (int i = -kernel_size + 1; i < kernel_size; i++) {
+    coefs[i + kernel_size - 1] = gauss_distr((float)i, 1.0f);
+  }
+
+  return coefs;
+}
 
 /// RESOURCE ALLOCATION
 
@@ -57,7 +77,20 @@ void SimpleShadowmapRender::AllocateResources()
     .name = "constants"
   });
 
+  gauss_coeffs = m_context->createBuffer(etna::Buffer::CreateInfo
+  {
+    .size = sizeof(GaussUBO),
+    .bufferUsage = vk::BufferUsageFlagBits::eUniformBuffer,
+    .memoryUsage = VMA_MEMORY_USAGE_CPU_ONLY,
+    .name = "gaussUBO"
+  });
+
   m_uboMappedMem = constants.map();
+
+  std::vector<float> gauss_coeffs_data = get_gauss_coeffs(KERNEL_SIZE);
+  m_gaussCoeffsMappedMem = gauss_coeffs.map();
+  memcpy(m_gaussCoeffsMappedMem, gauss_coeffs_data.data(), sizeof(gauss_coeffs_data));
+  gauss_coeffs.unmap();
 }
 
 void SimpleShadowmapRender::LoadScene(const char* path, bool transpose_inst_matrices)
@@ -84,6 +117,7 @@ void SimpleShadowmapRender::DeallocateResources()
   vkDestroySurfaceKHR(GetVkInstance(), m_surface, nullptr);  
 
   constants = etna::Buffer();
+  gauss_coeffs = etna::Buffer();
 }
 
 
@@ -225,6 +259,7 @@ void SimpleShadowmapRender::BuildCommandBufferSimple(VkCommandBuffer a_cmdBuff, 
     {
       etna::Binding {0, preProcImage.genBinding(defaultSampler.get(), vk::ImageLayout::eGeneral)},
       etna::Binding {1, postProcImage.genBinding(defaultSampler.get(), vk::ImageLayout::eGeneral)},
+      etna::Binding {2, gauss_coeffs.genBinding()}
     });
 
     VkDescriptorSet vkSet = set.getVkSet();
