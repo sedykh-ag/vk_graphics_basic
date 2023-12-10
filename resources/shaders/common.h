@@ -41,6 +41,11 @@ using shader_bool  = LiteMath::uint;
 
 #endif
 
+// for gauss comp shader
+#define WORKGROUP_SIZE 4 // 16
+#define KERNEL_SIZE 5 // 11
+#define HALF_SIZE 2 // 5
+#define SHARED_WINDOW_SIZE (WORKGROUP_SIZE + KERNEL_SIZE - 1)
 
 struct UniformParams
 {
@@ -49,6 +54,11 @@ struct UniformParams
   shader_float time;
   shader_vec3  baseColor;
   shader_bool  animateLightColor;
+};
+
+struct GaussUBO
+{
+  float coeffs[KERNEL_SIZE];
 };
 
 #endif // VK_GRAPHICS_BASIC_COMMON_H

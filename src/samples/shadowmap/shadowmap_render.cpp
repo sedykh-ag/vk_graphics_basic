@@ -234,7 +234,7 @@ void SimpleShadowmapRender::BuildCommandBufferSimple(VkCommandBuffer a_cmdBuff, 
       0, 1, &vkSet, 0, VK_NULL_HANDLE);
 
     etna::flush_barriers(a_cmdBuff);
-    vkCmdDispatch(a_cmdBuff, m_width / 16 + 1, m_height / 16 + 1, 1);
+    vkCmdDispatch(a_cmdBuff, m_width, m_height, 1);
   }
 
   etna::set_state(a_cmdBuff, a_targetImage, vk::PipelineStageFlagBits2::eBlit,
