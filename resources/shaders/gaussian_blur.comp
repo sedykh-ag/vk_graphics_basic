@@ -1,18 +1,45 @@
 #version 450
 #extension GL_ARB_separate_shader_objects : enable
-// #extension GL_GOOGLE_include_directive : require
+#extension GL_GOOGLE_include_directive : require
 
-layout(local_size_x = 16, local_size_y = 16) in;
+#include "common.h"
 
-layout(rgba8, binding = 0) uniform readonly image2D inputImage;
-layout(rgba8, binding = 1) uniform writeonly image2D outputImage;
+
+layout(local_size_x = WORKGROUP_SIZE, local_size_y = WORKGROUP_SIZE) in;
+
+layout(rgba8, binding = 0) uniform restrict readonly image2D inputImage;
+layout(rgba8, binding = 1) uniform restrict writeonly image2D outputImage;
+layout(std140, binding = 2) uniform GaussUBO
+{
+    float coeffs[KERNEL_SIZE];
+} ubo;
+
+shared vec4 shared_pixels[SHARED_WINDOW_SIZE][SHARED_WINDOW_SIZE];
+
 
 void main()
 {
-    ivec2 imSize = imageSize(inputImage);
-    ivec2 pixelCoord = ivec2(gl_GlobalInvocationID.xy);
+    ivec2 size = imageSize(inputImage);
+	ivec2 global_coord = ivec2(gl_GlobalInvocationID.xy);
+	ivec2 local_coord = ivec2(gl_LocalInvocationID.xy)
 
-    vec4 col = imageLoad(inputImage, pixelCoord) * vec4(1.0f, 1.0f, 0.0f, 1.0f);
+	// caching
+	for (int i = 0; i < KERNEL_SIZE; i++)
+	{
+		for (int j = 0; j < KERNEL_SIZE; j++)
+		{
+			ivec2 cache_coords = local_coord + ivec2(i, j)
+			ivec2 image_coords = global_coord - ivec2(HALF_SIZE, HALF_SIZE) + ivec2(i, j);
 
-    imageStore(outputImage, pixelCoord, col);
+			image_coords = clamp(image_coords, ivec2(0, 0), imageSize);
+
+			shared_pixels[cache_coords.x][cache_coords.y] = imageLoad(inputImage, image_coords); 
+		}
+	}
+
+	barrier();
+
+	// simple output
+	ivec2 cache_center_coords = local_coord + ivec2(HALF_SIZE, HALF_SIZE);
+	imageStore(outputImage, global_coord, shared_pixels[cache_center_coords]);
 }

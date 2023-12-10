@@ -10,6 +10,26 @@
 #include <etna/RenderTargetStates.hpp>
 #include <vulkan/vulkan_core.h>
 
+#include <cmath>
+#include <vector>
+
+float gauss_distr(float x, float sigma)
+{
+  return exp(-x*x / (2 * sigma * sigma)) / sqrt(2 * LiteMath::M_PI);
+}
+
+// generate gauss coeffs
+std::vector<float> get_gauss_coeffs(int kernel_size) {
+  int N = 2 * kernel_size - 1;
+  
+  std::vector<float> coefs(N);
+
+  for (int i = -kernel_size + 1; i < kernel_size; i++) {
+    coefs[i + kernel_size - 1] = gauss_distr((float)i, 1.0f);
+  }
+
+  return coefs;
+}
 
 /// RESOURCE ALLOCATION
 
@@ -57,7 +77,19 @@ void SimpleShadowmapRender::AllocateResources()
     .name = "constants"
   });
 
+  gauss_coeffs = m_context->createBuffer(etna::Buffer::CreateInfo
+  {
+    .size = sizeof(GaussUBO),
+    .bufferUsage = vk::BufferUsageFlagBits::eUniformBuffer,
+    .memoryUsage = VMA_MEMORY_USAGE_CPU_ONLY,
+    .name = "gaussUBO"
+  });
+
   m_uboMappedMem = constants.map();
+  m_gaussCoeffsMappedMem = gauss_coeffs.map();
+
+  std::vector<float> gauss_coeffs_data = get_gauss_coeffs(KERNEL_SIZE);
+  memcpy(m_gaussCoeffsMappedMem, gauss_coeffs_data.data(), sizeof(gauss_coeffs_data));
 }
 
 void SimpleShadowmapRender::LoadScene(const char* path, bool transpose_inst_matrices)
@@ -84,6 +116,7 @@ void SimpleShadowmapRender::DeallocateResources()
   vkDestroySurfaceKHR(GetVkInstance(), m_surface, nullptr);  
 
   constants = etna::Buffer();
+  gauss_coeffs = etna::Buffer();
 }
 
 
@@ -225,6 +258,7 @@ void SimpleShadowmapRender::BuildCommandBufferSimple(VkCommandBuffer a_cmdBuff, 
     {
       etna::Binding {0, preProcImage.genBinding(defaultSampler.get(), vk::ImageLayout::eGeneral)},
       etna::Binding {1, postProcImage.genBinding(defaultSampler.get(), vk::ImageLayout::eGeneral)},
+      etna::Binding {2, gauss_coeffs.genBinding()}
     });
 
     VkDescriptorSet vkSet = set.getVkSet();
@@ -234,7 +268,7 @@ void SimpleShadowmapRender::BuildCommandBufferSimple(VkCommandBuffer a_cmdBuff, 
       0, 1, &vkSet, 0, VK_NULL_HANDLE);
 
     etna::flush_barriers(a_cmdBuff);
-    vkCmdDispatch(a_cmdBuff, m_width / 16 + 1, m_height / 16 + 1, 1);
+    vkCmdDispatch(a_cmdBuff, m_width, m_height, 1);
   }
 
   etna::set_state(a_cmdBuff, a_targetImage, vk::PipelineStageFlagBits2::eBlit,
