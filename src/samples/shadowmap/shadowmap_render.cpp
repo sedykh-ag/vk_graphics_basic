@@ -15,20 +15,21 @@
 
 float gauss_distr(float x, float sigma)
 {
-  return exp(-x*x / (2 * sigma * sigma)) / sqrt(2 * LiteMath::M_PI);
+  return exp(-x*x / (2*sigma*sigma)) / (sqrt(2 * LiteMath::M_PI) * sigma);
 }
 
-// generate gauss coeffs
-std::vector<float> get_gauss_coeffs(int kernel_size) {
-  int N = 2 * kernel_size - 1;
-  
-  std::vector<float> coefs(N);
-
-  for (int i = -kernel_size + 1; i < kernel_size; i++) {
-    coefs[i + kernel_size - 1] = gauss_distr((float)i, 1.0f);
+// generate 1D gauss kernel (centered)
+std::vector<float> get_gauss_coeffs(int kernel_size, float sigma) 
+{
+  int half_size = kernel_size / 2;
+  std::vector<float> coeffs(kernel_size);
+  for (int i = 0; i < kernel_size; i++)
+  {
+    float x = (float)i - (float)half_size;
+    coeffs[i] = gauss_distr(x, sigma);
   }
 
-  return coefs;
+  return coeffs;
 }
 
 /// RESOURCE ALLOCATION
@@ -87,7 +88,9 @@ void SimpleShadowmapRender::AllocateResources()
 
   m_uboMappedMem = constants.map();
 
-  std::vector<float> gauss_coeffs_data = get_gauss_coeffs(KERNEL_SIZE);
+  // caution: яркость изображения уменьшается с параметром sigma, так как распределение ограничено окном,
+  // а при большИх сигма все больше информации оказывается в хвостах распределения
+  std::vector<float> gauss_coeffs_data = get_gauss_coeffs(KERNEL_SIZE, 1.0f);
   m_gaussCoeffsMappedMem = gauss_coeffs.map();
   memcpy(m_gaussCoeffsMappedMem, gauss_coeffs_data.data(), sizeof(gauss_coeffs_data));
   gauss_coeffs.unmap();
@@ -269,7 +272,7 @@ void SimpleShadowmapRender::BuildCommandBufferSimple(VkCommandBuffer a_cmdBuff, 
       0, 1, &vkSet, 0, VK_NULL_HANDLE);
 
     etna::flush_barriers(a_cmdBuff);
-    vkCmdDispatch(a_cmdBuff, m_width, m_height, 1);
+    vkCmdDispatch(a_cmdBuff, m_width / WORKGROUP_SIZE, m_height / WORKGROUP_SIZE, 1);
   }
 
   etna::set_state(a_cmdBuff, a_targetImage, vk::PipelineStageFlagBits2::eBlit,

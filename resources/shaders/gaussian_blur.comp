@@ -41,7 +41,37 @@ void main()
 
 	barrier();
 
+	// apply gaussian kernel
+	
+	vec4[KERNEL_SIZE] horizontal_pass_results;
+
+	// vertical pass (y convolution)
+	for (int i = 0; i < KERNEL_SIZE; i++)
+	{
+		vec4 result_color = vec4(0.0f);
+		for (int j = 0; j < KERNEL_SIZE; j++)
+		{
+			ivec2 cache_coords = local_coord + ivec2(i, j);
+			result_color += shared_pixels[cache_coords.x][cache_coords.y] * ubo.coeffs[i];
+		}
+		horizontal_pass_results[i] = vec4(result_color.rgb, 1.0f);
+	}
+
+	barrier();
+
+	// horizontal pass (x convolution)
+	vec4 result_color = vec4(0.0f);
+	for (int i = 0; i < KERNEL_SIZE; i++)
+	{
+		result_color += horizontal_pass_results[i] * ubo.coeffs[i];
+	}
+
+	barrier();
+
+	imageStore(outputImage, global_coord, vec4(result_color.rgb, 1.0f));
+	
+
 	// passthrough output
-	ivec2 cache_center_coords = local_coord + ivec2(HALF_SIZE, HALF_SIZE);
-	imageStore(outputImage, global_coord, shared_pixels[cache_center_coords.x][cache_center_coords.y]);
+	// ivec2 cache_center_coords = local_coord + ivec2(HALF_SIZE, HALF_SIZE);
+	// imageStore(outputImage, global_coord, shared_pixels[cache_center_coords.x][cache_center_coords.y]);
 }

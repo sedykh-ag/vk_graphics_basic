@@ -42,9 +42,9 @@ using shader_bool  = LiteMath::uint;
 #endif
 
 // for gauss comp shader
-#define WORKGROUP_SIZE 4 // 16
-#define KERNEL_SIZE 5 // 11
-#define HALF_SIZE 2 // 5
+#define WORKGROUP_SIZE 16
+#define KERNEL_SIZE 11
+#define HALF_SIZE 5
 #define SHARED_WINDOW_SIZE (WORKGROUP_SIZE + KERNEL_SIZE - 1)
 
 struct UniformParams
