@@ -86,10 +86,11 @@ void SimpleShadowmapRender::AllocateResources()
   });
 
   m_uboMappedMem = constants.map();
-  m_gaussCoeffsMappedMem = gauss_coeffs.map();
 
   std::vector<float> gauss_coeffs_data = get_gauss_coeffs(KERNEL_SIZE);
+  m_gaussCoeffsMappedMem = gauss_coeffs.map();
   memcpy(m_gaussCoeffsMappedMem, gauss_coeffs_data.data(), sizeof(gauss_coeffs_data));
+  gauss_coeffs.unmap();
 }
 
 void SimpleShadowmapRender::LoadScene(const char* path, bool transpose_inst_matrices)

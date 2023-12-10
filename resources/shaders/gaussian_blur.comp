@@ -9,29 +9,31 @@ layout(local_size_x = WORKGROUP_SIZE, local_size_y = WORKGROUP_SIZE) in;
 
 layout(rgba8, binding = 0) uniform restrict readonly image2D inputImage;
 layout(rgba8, binding = 1) uniform restrict writeonly image2D outputImage;
-layout(std140, binding = 2) uniform GaussUBO
+
+layout(std140, binding = 2) uniform GaussUBO_t
 {
     float coeffs[KERNEL_SIZE];
 } ubo;
+
 
 shared vec4 shared_pixels[SHARED_WINDOW_SIZE][SHARED_WINDOW_SIZE];
 
 
 void main()
 {
-    ivec2 size = imageSize(inputImage);
+    ivec2 image_size = imageSize(inputImage);
 	ivec2 global_coord = ivec2(gl_GlobalInvocationID.xy);
-	ivec2 local_coord = ivec2(gl_LocalInvocationID.xy)
+	ivec2 local_coord = ivec2(gl_LocalInvocationID.xy);
 
 	// caching
 	for (int i = 0; i < KERNEL_SIZE; i++)
 	{
 		for (int j = 0; j < KERNEL_SIZE; j++)
 		{
-			ivec2 cache_coords = local_coord + ivec2(i, j)
+			ivec2 cache_coords = local_coord + ivec2(i, j);
 			ivec2 image_coords = global_coord - ivec2(HALF_SIZE, HALF_SIZE) + ivec2(i, j);
 
-			image_coords = clamp(image_coords, ivec2(0, 0), imageSize);
+			image_coords = clamp(image_coords, ivec2(0, 0), image_size);
 
 			shared_pixels[cache_coords.x][cache_coords.y] = imageLoad(inputImage, image_coords); 
 		}
@@ -39,7 +41,7 @@ void main()
 
 	barrier();
 
-	// simple output
+	// passthrough output
 	ivec2 cache_center_coords = local_coord + ivec2(HALF_SIZE, HALF_SIZE);
-	imageStore(outputImage, global_coord, shared_pixels[cache_center_coords]);
+	imageStore(outputImage, global_coord, shared_pixels[cache_center_coords.x][cache_center_coords.y]);
 }
