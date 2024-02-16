@@ -108,7 +108,7 @@ private:
   {
     ShadowMapCam() 
     {  
-      cam.pos    = float3(4.0f, 4.0f, 4.0f);
+      cam.pos    = float3(0.0f, 0.5f, 5.0f);
       cam.lookAt = float3(0, 0, 0);
       cam.up     = float3(0, 1, 0);
   
@@ -123,6 +123,8 @@ private:
     bool   usePerspectiveM;  ///!< use perspective matrix if true and ortographics otherwise
   
   } m_light;
+  float m_outerFOV = 45.0f;
+  float m_innerFOV = 20.0f;
  
   void DrawFrameSimple(bool draw_gui);
 
