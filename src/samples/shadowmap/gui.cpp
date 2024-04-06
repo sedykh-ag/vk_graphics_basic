@@ -18,6 +18,9 @@ void SimpleShadowmapRender::SetupGUIElements()
 
     ImGui::NewLine();
 
+    const char* items[] = { "OFF", "SSAA" };
+    ImGui::Combo("AA mode", &m_aaMode, items, IM_ARRAYSIZE(items));
+
     ImGui::TextColored(ImVec4(1.0f, 1.0f, 0.0f, 1.0f),"Press 'B' to recompile and reload shaders");
     ImGui::End();
   }

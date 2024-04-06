@@ -47,6 +47,8 @@ private:
   etna::GlobalContext* m_context;
   etna::Image mainViewDepth;
   etna::Image shadowMap;
+  etna::Image ssaaDepth;
+  etna::Image ssaaTex;
   etna::Sampler defaultSampler;
   etna::Buffer constants;
 
@@ -59,6 +61,12 @@ private:
     VkSemaphore imageAvailable    = VK_NULL_HANDLE;
     VkSemaphore renderingFinished = VK_NULL_HANDLE;
   } m_presentationResources;
+
+  enum AA_MODE
+  {
+    OFF = 0,
+    SSAA = 1,
+  };
 
   std::vector<VkFence> m_frameFences;
   std::vector<VkCommandBuffer> m_cmdBuffersDrawMain;
@@ -86,6 +94,7 @@ private:
   uint32_t m_height = 1024u;
   uint32_t m_framesInFlight = 2u;
   bool m_vsync = false;
+  int m_aaMode = AA_MODE::OFF;
 
   vk::PhysicalDeviceFeatures m_enabledDeviceFeatures = {};
   std::vector<const char*> m_deviceExtensions;
@@ -127,6 +136,7 @@ private:
   void DrawFrameSimple(bool draw_gui);
 
   void BuildCommandBufferSimple(VkCommandBuffer a_cmdBuff, VkImage a_targetImage, VkImageView a_targetImageView);
+  void BuildCommandBufferSSAA(VkCommandBuffer a_cmdBuff, VkImage a_targetImage, VkImageView a_targetImageView);
 
   void DrawSceneCmd(VkCommandBuffer a_cmdBuff, const float4x4& a_wvp, VkPipelineLayout a_pipelineLayout = VK_NULL_HANDLE);
 
