@@ -48,7 +48,9 @@ private:
   etna::Image mainViewDepth;
   etna::Image shadowMap;
   etna::Image ssaaDepth;
+  etna::Image msaaDepth;
   etna::Image ssaaTex;
+  etna::Image msaaTex;
   etna::Sampler defaultSampler;
   etna::Buffer constants;
 
@@ -66,6 +68,7 @@ private:
   {
     OFF = 0,
     SSAA = 1,
+    MSAA = 2,
   };
 
   std::vector<VkFence> m_frameFences;
@@ -84,6 +87,7 @@ private:
   void* m_uboMappedMem = nullptr;
 
   etna::GraphicsPipeline m_basicForwardPipeline {};
+  etna::GraphicsPipeline m_basicForwardMSAAPipeline {};
   etna::GraphicsPipeline m_shadowPipeline {};
   
   VkSurfaceKHR m_surface = VK_NULL_HANDLE;
@@ -95,6 +99,7 @@ private:
   uint32_t m_framesInFlight = 2u;
   bool m_vsync = false;
   int m_aaMode = AA_MODE::OFF;
+  bool m_aaChanged = false;
 
   vk::PhysicalDeviceFeatures m_enabledDeviceFeatures = {};
   std::vector<const char*> m_deviceExtensions;
@@ -136,6 +141,7 @@ private:
   void DrawFrameSimple(bool draw_gui);
 
   void BuildCommandBufferSimple(VkCommandBuffer a_cmdBuff, VkImage a_targetImage, VkImageView a_targetImageView);
+  void BuildCommandBufferMSAA(VkCommandBuffer a_cmdBuff, VkImage a_targetImage, VkImageView a_targetImageView);
   void BuildCommandBufferSSAA(VkCommandBuffer a_cmdBuff, VkImage a_targetImage, VkImageView a_targetImageView);
 
   void DrawSceneCmd(VkCommandBuffer a_cmdBuff, const float4x4& a_wvp, VkPipelineLayout a_pipelineLayout = VK_NULL_HANDLE);

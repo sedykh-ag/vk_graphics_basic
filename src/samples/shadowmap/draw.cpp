@@ -26,6 +26,9 @@ void SimpleShadowmapRender::DrawFrameSimple(bool draw_gui)
     case AA_MODE::SSAA:
       BuildCommandBufferSSAA(currentCmdBuf, m_swapchain.GetAttachment(imageIdx).image, m_swapchain.GetAttachment(imageIdx).view);
       break;
+    case AA_MODE::MSAA:
+      BuildCommandBufferMSAA(currentCmdBuf, m_swapchain.GetAttachment(imageIdx).image, m_swapchain.GetAttachment(imageIdx).view);
+      break;
   }
 
   std::vector<VkCommandBuffer> submitCmdBufs = { currentCmdBuf };
@@ -42,7 +45,7 @@ void SimpleShadowmapRender::DrawFrameSimple(bool draw_gui)
   submitInfo.waitSemaphoreCount = 1;
   submitInfo.pWaitSemaphores = waitSemaphores;
   submitInfo.pWaitDstStageMask = waitStages;
-  submitInfo.commandBufferCount = submitCmdBufs.size();
+  submitInfo.commandBufferCount = static_cast<uint32_t>(submitCmdBufs.size());
   submitInfo.pCommandBuffers = submitCmdBufs.data();
 
   VkSemaphore signalSemaphores[] = {m_presentationResources.renderingFinished};

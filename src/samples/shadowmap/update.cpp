@@ -72,7 +72,18 @@ void SimpleShadowmapRender::ProcessInput(const AppInput &input)
 
     for (uint32_t i = 0; i < m_framesInFlight; ++i)
     {
-      BuildCommandBufferSimple(m_cmdBuffersDrawMain[i], m_swapchain.GetAttachment(i).image, m_swapchain.GetAttachment(i).view);
+      switch (m_aaMode)
+      {
+        case AA_MODE::OFF:
+          BuildCommandBufferSimple(m_cmdBuffersDrawMain[i], m_swapchain.GetAttachment(i).image, m_swapchain.GetAttachment(i).view);
+          break;
+        case AA_MODE::SSAA:
+          BuildCommandBufferSSAA(m_cmdBuffersDrawMain[i], m_swapchain.GetAttachment(i).image, m_swapchain.GetAttachment(i).view);
+          break;
+        case AA_MODE::MSAA:
+          BuildCommandBufferMSAA(m_cmdBuffersDrawMain[i], m_swapchain.GetAttachment(i).image, m_swapchain.GetAttachment(i).view);
+          break;
+      }
     }
   }
 }
