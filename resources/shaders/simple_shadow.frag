@@ -12,6 +12,9 @@ layout (location = 0 ) in VS_OUT
   vec3 wNorm;
   vec3 wTangent;
   vec2 texCoord;
+  
+  vec4 prevClipPos;
+  vec4 currentClipPos; 
 } surf;
 
 layout(binding = 0, set = 0) uniform AppData

@@ -21,6 +21,7 @@ void SimpleShadowmapRender::UpdateView()
   auto mLookAt = LiteMath::lookAt(m_cam.pos, m_cam.lookAt, m_cam.up);
   auto mWorldViewProj = mProjFix * mProj * mLookAt;
   
+  m_worldViewProjPrev = m_worldViewProj;
   m_worldViewProj = mWorldViewProj;
   
   ///// calc light matrix
@@ -82,6 +83,9 @@ void SimpleShadowmapRender::ProcessInput(const AppInput &input)
           break;
         case AA_MODE::MSAA:
           BuildCommandBufferMSAA(m_cmdBuffersDrawMain[i], m_swapchain.GetAttachment(i).image, m_swapchain.GetAttachment(i).view);
+          break;
+        case AA_MODE::TAA:
+          BuildCommandBufferTAA(m_cmdBuffersDrawMain[i], m_swapchain.GetAttachment(i).image, m_swapchain.GetAttachment(i).view);
           break;
       }
     }

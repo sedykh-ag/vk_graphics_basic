@@ -29,6 +29,9 @@ void SimpleShadowmapRender::DrawFrameSimple(bool draw_gui)
     case AA_MODE::MSAA:
       BuildCommandBufferMSAA(currentCmdBuf, m_swapchain.GetAttachment(imageIdx).image, m_swapchain.GetAttachment(imageIdx).view);
       break;
+    case AA_MODE::TAA:
+      BuildCommandBufferTAA(currentCmdBuf, m_swapchain.GetAttachment(imageIdx).image, m_swapchain.GetAttachment(imageIdx).view);
+      break;
   }
 
   std::vector<VkCommandBuffer> submitCmdBufs = { currentCmdBuf };
@@ -76,6 +79,7 @@ void SimpleShadowmapRender::DrawFrameSimple(bool draw_gui)
 
 void SimpleShadowmapRender::DrawFrame(float a_time, DrawMode a_mode)
 {
+  m_iFrame++;
   UpdateUniformBuffer(a_time);
   switch (a_mode)
   {
@@ -89,5 +93,4 @@ void SimpleShadowmapRender::DrawFrame(float a_time, DrawMode a_mode)
     default:
       DrawFrameSimple(false);
   }
-
 }

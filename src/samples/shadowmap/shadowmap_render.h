@@ -51,6 +51,9 @@ private:
   etna::Image msaaDepth;
   etna::Image ssaaTex;
   etna::Image msaaTex;
+  etna::Image currFrame;
+  etna::Image prevFrame;
+  etna::Image motionVectors;
   etna::Sampler defaultSampler;
   etna::Buffer constants;
 
@@ -69,6 +72,7 @@ private:
     OFF = 0,
     SSAA = 1,
     MSAA = 2,
+    TAA = 3,
   };
 
   std::vector<VkFence> m_frameFences;
@@ -78,15 +82,21 @@ private:
   {
     float4x4 projView;
     float4x4 model;
+    float4x4 projViewPrev;
+    float4 jitter;
   } pushConst2M;
 
   float4x4 m_worldViewProj;
+  float4x4 m_worldViewProjPrev;
   float4x4 m_lightMatrix;    
 
   UniformParams m_uniforms {};
   void* m_uboMappedMem = nullptr;
 
   etna::GraphicsPipeline m_basicForwardPipeline {};
+  etna::GraphicsPipeline m_TAAJitterPipeline {};
+  etna::GraphicsPipeline m_TAAMotionVectorsPipeline {};
+  etna::GraphicsPipeline m_TAABlendPipeline {};
   etna::GraphicsPipeline m_basicForwardMSAAPipeline {};
   etna::GraphicsPipeline m_shadowPipeline {};
   
@@ -97,8 +107,9 @@ private:
   uint32_t m_width  = 1024u;
   uint32_t m_height = 1024u;
   uint32_t m_framesInFlight = 2u;
+  uint32_t m_iFrame = 0u;
   bool m_vsync = false;
-  int m_aaMode = AA_MODE::OFF;
+  int m_aaMode = AA_MODE::TAA;
   bool m_aaChanged = false;
 
   vk::PhysicalDeviceFeatures m_enabledDeviceFeatures = {};
@@ -138,13 +149,17 @@ private:
   
   } m_light;
  
+  float4 GetHalton(uint32_t iFrame);
+
   void DrawFrameSimple(bool draw_gui);
 
   void BuildCommandBufferSimple(VkCommandBuffer a_cmdBuff, VkImage a_targetImage, VkImageView a_targetImageView);
+  void BuildCommandBufferTAA(VkCommandBuffer a_cmdBuff, VkImage a_targetImage, VkImageView a_targetImageView);
   void BuildCommandBufferMSAA(VkCommandBuffer a_cmdBuff, VkImage a_targetImage, VkImageView a_targetImageView);
   void BuildCommandBufferSSAA(VkCommandBuffer a_cmdBuff, VkImage a_targetImage, VkImageView a_targetImageView);
 
   void DrawSceneCmd(VkCommandBuffer a_cmdBuff, const float4x4& a_wvp, VkPipelineLayout a_pipelineLayout = VK_NULL_HANDLE);
+  void DrawSceneTAACmd(VkCommandBuffer a_cmdBuff, VkPipelineLayout a_pipelineLayout = VK_NULL_HANDLE);
 
   void loadShaders();
 
