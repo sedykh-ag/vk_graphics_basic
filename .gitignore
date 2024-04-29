@@ -2,4 +2,5 @@ bin
 build
 external
 .vs
+.vscode
 .cache

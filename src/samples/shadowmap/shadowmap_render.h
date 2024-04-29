@@ -47,8 +47,17 @@ private:
   etna::GlobalContext* m_context;
   etna::Image mainViewDepth;
   etna::Image shadowMap;
+  etna::Image heightMap;
+  etna::Buffer heightMapBuffer;
   etna::Sampler defaultSampler;
   etna::Buffer constants;
+
+  struct heightMapExtent
+  {
+    uint32_t width = 128;
+    uint32_t height = 128;
+    uint32_t depth = 1;
+  } texture;
 
   VkCommandPool    m_commandPool    = VK_NULL_HANDLE;
 
@@ -67,7 +76,14 @@ private:
   {
     float4x4 projView;
     float4x4 model;
+    float tessLevel;
+    float minHeight;
+    float maxHeight;
   } pushConst2M;
+
+  float m_tessLevel = 50.0f;
+  float m_minHeight = -10.0f;
+  float m_maxHeight = 10.0f;
 
   float4x4 m_worldViewProj;
   float4x4 m_lightMatrix;    
@@ -75,6 +91,7 @@ private:
   UniformParams m_uniforms {};
   void* m_uboMappedMem = nullptr;
 
+  etna::GraphicsPipeline m_tesselationPipeline {};
   etna::GraphicsPipeline m_basicForwardPipeline {};
   etna::GraphicsPipeline m_shadowPipeline {};
   
@@ -87,7 +104,7 @@ private:
   uint32_t m_framesInFlight = 2u;
   bool m_vsync = false;
 
-  vk::PhysicalDeviceFeatures m_enabledDeviceFeatures = {};
+  vk::PhysicalDeviceFeatures m_enabledDeviceFeatures = { .tessellationShader = VK_TRUE };
   std::vector<const char*> m_deviceExtensions;
   std::vector<const char*> m_instanceExtensions;
 
@@ -125,10 +142,9 @@ private:
   } m_light;
  
   void DrawFrameSimple(bool draw_gui);
+  void UpdateNoiseTexture();
 
   void BuildCommandBufferSimple(VkCommandBuffer a_cmdBuff, VkImage a_targetImage, VkImageView a_targetImageView);
-
-  void DrawSceneCmd(VkCommandBuffer a_cmdBuff, const float4x4& a_wvp, VkPipelineLayout a_pipelineLayout = VK_NULL_HANDLE);
 
   void loadShaders();
 

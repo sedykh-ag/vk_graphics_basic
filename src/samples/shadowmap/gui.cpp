@@ -18,7 +18,12 @@ void SimpleShadowmapRender::SetupGUIElements()
 
     ImGui::NewLine();
 
+    ImGui::SliderFloat("Tesselation level", &m_tessLevel, 0.0f, 100.0f);
+
+    ImGui::DragFloatRange2("Height boundaries", &m_minHeight, &m_maxHeight, 1.0f, -50.0f, 50.0f, "Min: %.1f", "Max: %.1f");
+
     ImGui::TextColored(ImVec4(1.0f, 1.0f, 0.0f, 1.0f),"Press 'B' to recompile and reload shaders");
+    ImGui::TextColored(ImVec4(1.0f, 1.0f, 0.0f, 1.0f),"Press 'Q' to see the noise texture");
     ImGui::End();
   }
 

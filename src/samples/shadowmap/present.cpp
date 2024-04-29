@@ -72,5 +72,6 @@ void SimpleShadowmapRender::InitPresentation(VkSurfaceKHR &a_surface, bool)
   m_presentationResources.currentFrame = 0;
 
   AllocateResources();
+  UpdateNoiseTexture();
   InitPresentStuff();
 }

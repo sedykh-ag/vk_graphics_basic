@@ -24,7 +24,6 @@ layout (location = 0 ) out VS_OUT
 
 } vOut;
 
-out gl_PerVertex { vec4 gl_Position; };
 void main(void)
 {
     const vec4 wNorm = vec4(DecodeNormal(floatBitsToInt(vPosNorm.w)),         0.0f);
