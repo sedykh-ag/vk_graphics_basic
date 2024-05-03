@@ -23,6 +23,14 @@ void SimpleShadowmapRender::AllocateResources()
     .imageUsage = vk::ImageUsageFlagBits::eDepthStencilAttachment
   });
 
+  mainViewColor = m_context->createImage(etna::Image::CreateInfo
+  {
+    .extent = vk::Extent3D{m_width, m_height, 1},
+    .name = "main_view_color",
+    .format = vk::Format::eR16G16B16A16Sfloat,
+    .imageUsage = vk::ImageUsageFlagBits::eColorAttachment | vk::ImageUsageFlagBits::eSampled
+  });
+
   shadowMap = m_context->createImage(etna::Image::CreateInfo
   {
     .extent = vk::Extent3D{2048, 2048, 1},
@@ -91,6 +99,11 @@ void SimpleShadowmapRender::loadShaders()
   etna::create_program("simple_material",
     {VK_GRAPHICS_BASIC_ROOT"/resources/shaders/simple_shadow.frag.spv", VK_GRAPHICS_BASIC_ROOT"/resources/shaders/simple.vert.spv"});
   etna::create_program("simple_shadow", {VK_GRAPHICS_BASIC_ROOT"/resources/shaders/simple.vert.spv"});
+  etna::create_program("tonemapping",
+  {
+    VK_GRAPHICS_BASIC_ROOT"/resources/shaders/quad3.vert.spv",
+    VK_GRAPHICS_BASIC_ROOT"/resources/shaders/tonemapping.frag.spv"
+  });
 }
 
 void SimpleShadowmapRender::SetupSimplePipeline()
@@ -109,8 +122,15 @@ void SimpleShadowmapRender::SetupSimplePipeline()
       .vertexShaderInput = sceneVertexInputDesc,
       .fragmentShaderOutput =
         {
-          .colorAttachmentFormats = {static_cast<vk::Format>(m_swapchain.GetFormat())},
+          .colorAttachmentFormats = { vk::Format::eR16G16B16A16Sfloat },
           .depthAttachmentFormat = vk::Format::eD32Sfloat
+        }
+    });
+  m_toneMappingPipeline = pipelineManager.createGraphicsPipeline("tonemapping",
+    {
+      .fragmentShaderOutput = 
+        {
+          .colorAttachmentFormats = { static_cast<vk::Format>(m_swapchain.GetFormat()) }
         }
     });
   m_shadowPipeline = pipelineManager.createGraphicsPipeline("simple_shadow",
@@ -169,7 +189,7 @@ void SimpleShadowmapRender::BuildCommandBufferSimple(VkCommandBuffer a_cmdBuff, 
     DrawSceneCmd(a_cmdBuff, m_lightMatrix, m_shadowPipeline.getVkPipelineLayout());
   }
 
-  //// draw final scene to screen
+  //// draw final scene to texture
   //
   {
     auto simpleMaterialInfo = etna::get_shader_program("simple_material");
@@ -183,7 +203,7 @@ void SimpleShadowmapRender::BuildCommandBufferSimple(VkCommandBuffer a_cmdBuff, 
     VkDescriptorSet vkSet = set.getVkSet();
 
     etna::RenderTargetState renderTargets(a_cmdBuff, {0, 0, m_width, m_height},
-      {{.image = a_targetImage, .view = a_targetImageView}},
+      {{.image = mainViewColor.get(), .view = mainViewColor.getView({})}},
       {.image = mainViewDepth.get(), .view = mainViewDepth.getView({})});
 
     vkCmdBindPipeline(a_cmdBuff, VK_PIPELINE_BIND_POINT_GRAPHICS, m_basicForwardPipeline.getVkPipeline());
@@ -191,6 +211,32 @@ void SimpleShadowmapRender::BuildCommandBufferSimple(VkCommandBuffer a_cmdBuff, 
       m_basicForwardPipeline.getVkPipelineLayout(), 0, 1, &vkSet, 0, VK_NULL_HANDLE);
 
     DrawSceneCmd(a_cmdBuff, m_worldViewProj, m_basicForwardPipeline.getVkPipelineLayout());
+  }
+
+  //// perform tonemapping
+  //
+  {
+    auto tonemappingInfo = etna::get_shader_program("tonemapping");
+
+    auto set = etna::create_descriptor_set(tonemappingInfo.getDescriptorLayoutId(0), a_cmdBuff,
+    {
+      etna::Binding {0, mainViewColor.genBinding(defaultSampler.get(), vk::ImageLayout::eShaderReadOnlyOptimal)}
+    });
+
+    VkDescriptorSet vkSet = set.getVkSet();
+
+    etna::RenderTargetState renderTargets(a_cmdBuff, {0, 0, m_width, m_height},
+      {{.image = a_targetImage, .view = a_targetImageView}},
+      {}); // no depth attachment
+    
+    vkCmdBindPipeline(a_cmdBuff, VK_PIPELINE_BIND_POINT_GRAPHICS, m_toneMappingPipeline.getVkPipeline());
+    vkCmdBindDescriptorSets(a_cmdBuff, VK_PIPELINE_BIND_POINT_GRAPHICS,
+      m_toneMappingPipeline.getVkPipelineLayout(), 0, 1, &vkSet, 0, VK_NULL_HANDLE);
+    
+    vkCmdPushConstants(a_cmdBuff, m_toneMappingPipeline.getVkPipelineLayout(),
+      VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(pushConstTonemapping), &pushConstTonemapping);
+
+    vkCmdDraw(a_cmdBuff, 3, 1, 0, 0);
   }
 
   if(m_input.drawFSQuad)

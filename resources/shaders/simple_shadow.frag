@@ -21,6 +21,8 @@ layout(binding = 0, set = 0) uniform AppData
 
 layout (binding = 1) uniform sampler2D shadowMap;
 
+const float gamma = 2.2;
+
 void main()
 {
   const vec4 posLightClipSpace = Params.lightMatrix*vec4(surf.wPos, 1.0f); // 
@@ -38,5 +40,5 @@ void main()
    
   vec3 lightDir   = normalize(Params.lightPos - surf.wPos);
   vec4 lightColor = max(dot(surf.wNorm, lightDir), 0.0f) * lightColor1;
-  out_fragColor   = (lightColor*shadow + vec4(0.1f)) * vec4(Params.baseColor, 1.0f);
+  out_fragColor   = (lightColor*shadow*Params.brightness + vec4(0.1f)) * vec4(Params.baseColor, 1.0f);
 }

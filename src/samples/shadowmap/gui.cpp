@@ -18,6 +18,13 @@ void SimpleShadowmapRender::SetupGUIElements()
 
     ImGui::NewLine();
 
+    ImGui::SliderFloat("Light brightness", &m_brightness, 0.0f, 10.0f);
+
+    const char* items[] = { "OFF", "Reinhard", "Exposure", "ACES" };
+    ImGui::Combo("Tonemapping type", &pushConstTonemapping.tonemappingType, items, IM_ARRAYSIZE(items));
+    if (pushConstTonemapping.tonemappingType == 2)
+      ImGui::SliderFloat("Exposure value", &pushConstTonemapping.exposure, 0.0, 5.0);
+
     ImGui::TextColored(ImVec4(1.0f, 1.0f, 0.0f, 1.0f),"Press 'B' to recompile and reload shaders");
     ImGui::End();
   }
