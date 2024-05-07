@@ -21,7 +21,6 @@ layout (location = 0 ) out VS_OUT
     vec3 wNorm;
     vec3 wTangent;
     vec2 texCoord;
-
 } vOut;
 
 out gl_PerVertex { vec4 gl_Position; };

@@ -18,6 +18,10 @@ void SimpleShadowmapRender::SetupGUIElements()
 
     ImGui::NewLine();
 
+    ImGui::Checkbox("Subsurface scattering", &m_SubsurfaceOn);
+    ImGui::SliderFloat("Blur scale", &pushConstSubsurface.blurScale, 0.0f, 100.0f);
+    ImGui::SliderFloat("Correction", &pushConstSubsurface.correction, 0.0f, 100.0f);
+
     ImGui::TextColored(ImVec4(1.0f, 1.0f, 0.0f, 1.0f),"Press 'B' to recompile and reload shaders");
     ImGui::End();
   }

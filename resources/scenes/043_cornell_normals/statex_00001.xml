@@ -264,8 +264,8 @@
 </lights_lib>
 <cam_lib>
   <camera id="0" name="Camera001" type="uvn">
-    <fov>39.5977554</fov>
-    <nearClipPlane>0.00999999978</nearClipPlane>
+    <fov>45</fov>
+    <nearClipPlane>0.01</nearClipPlane>
     <farClipPlane>100</farClipPlane>
     <enable_dof>0</enable_dof>
     <dof_lens_radius>4.20389539e-45</dof_lens_radius>
@@ -320,7 +320,6 @@
       <remap_list id="1" size="2" val="0 6 " />
       <remap_list id="2" size="2" val="0 7 " />
     </remap_lists>
-    <instance id="0" mesh_id="0" rmap_id="0" scn_id="0" scn_sid="0" matrix="1 0 0 0 0 1.15132 0 -1.04481 0 0 1 0 0 0 0 1 " />
     <instance id="1" mesh_id="1" rmap_id="1" scn_id="0" scn_sid="0" matrix="0.999889 0 -0.0149171 0 0 1 0 -1.27 0.0149171 0 0.999889 0 0 0 0 1 " />
     <instance id="2" mesh_id="2" rmap_id="2" scn_id="0" scn_sid="0" matrix="1 0 0 0.985493 0 1 0 -1.27 0 0 1 0.512028 0 0 0 1 " />
     <instance id="3" mesh_id="3" rmap_id="2" scn_id="0" scn_sid="0" matrix="1 0 0 -0.826185 0 1 0 -1.27 0 0 1 0.809034 0 0 0 1 " />

@@ -46,6 +46,8 @@ public:
 private:
   etna::GlobalContext* m_context;
   etna::Image mainViewDepth;
+  etna::Image mainViewColor;
+  etna::Image intermediateColor;
   etna::Image shadowMap;
   etna::Sampler defaultSampler;
   etna::Buffer constants;
@@ -69,6 +71,14 @@ private:
     float4x4 model;
   } pushConst2M;
 
+  struct
+  {
+    float2 step = float2(1.0f, 0.0f);
+    float blurScale = 50.0f;
+    float correction = 50.0f;
+  } pushConstSubsurface;
+  bool m_SubsurfaceOn = true;
+
   float4x4 m_worldViewProj;
   float4x4 m_lightMatrix;    
 
@@ -77,6 +87,8 @@ private:
 
   etna::GraphicsPipeline m_basicForwardPipeline {};
   etna::GraphicsPipeline m_shadowPipeline {};
+  etna::GraphicsPipeline m_subsurfacePipeline {};
+  etna::GraphicsPipeline m_gammaCorrectionPipeline {};
   
   VkSurfaceKHR m_surface = VK_NULL_HANDLE;
   VulkanSwapChain m_swapchain;
@@ -127,6 +139,7 @@ private:
   void DrawFrameSimple(bool draw_gui);
 
   void BuildCommandBufferSimple(VkCommandBuffer a_cmdBuff, VkImage a_targetImage, VkImageView a_targetImageView);
+  void BuildCommandBufferSubsurface(VkCommandBuffer a_cmdBuff, VkImage a_targetImage, VkImageView a_targetImageView);
 
   void DrawSceneCmd(VkCommandBuffer a_cmdBuff, const float4x4& a_wvp, VkPipelineLayout a_pipelineLayout = VK_NULL_HANDLE);
 
