@@ -1,0 +1,72 @@
+#version 450
+#extension GL_GOOGLE_include_directive : require
+
+#include "common.h"
+
+layout(local_size_x = 256) in;
+
+struct Particle
+{
+  vec2 pos;
+  vec2 vel;
+  float remainingLifetime;
+};
+
+layout(std140, binding = 0) buffer PARTICLES
+{
+  Particle particles[ ];
+};
+
+layout(binding = 1) uniform UBO
+{
+  UniformParams ubo;
+};
+
+vec2 attraction(vec2 particlePos, vec2 attractorPos)
+{
+  const float gamma = 0.3f;
+  const float damp = 0.1f;
+  vec2 delta = attractorPos - particlePos;
+  float dDampedDot = dot(delta, delta) + damp;
+  float invDist = 1.0f / sqrt(dDampedDot);
+  float invDistCubed = invDist*invDist*invDist;
+  return delta * invDistCubed * gamma;
+}
+
+vec2 repulsion(vec2 particlePos, vec2 attractorPos)
+{
+  const float gamma = 0.1;
+	vec2 delta = attractorPos - particlePos;
+	float targetDistance = sqrt(dot(delta, delta));
+	return -delta * (1.0 / (targetDistance * targetDistance * targetDistance)) * gamma;
+}
+
+void main()
+{
+  uint index = gl_GlobalInvocationID.x;
+  if (index >= ubo.particlesCount)
+    return;
+  
+  vec2 vPos = particles[index].pos;
+  vec2 vVel = particles[index].vel;
+
+  // update lifetime
+  particles[index].remainingLifetime -= ubo.dt;
+
+  // update velocity
+  vec2 vAccel = repulsion(vPos, ubo.attractorPos);
+  vVel += vAccel * ubo.dt;
+
+  // update position
+  vPos += vVel * ubo.dt;
+
+  // collision
+  if ((vPos.x < -1.0) || (vPos.x > 1.0))
+    vVel.x = -vVel.x * 0.3;
+  else if ((vPos.y < -1.0) || (vPos.y > 1.0))
+    vVel.y = -vVel.y * 0.3;
+  else
+    particles[index].pos.xy = vPos;
+
+  particles[index].vel = vVel;
+}

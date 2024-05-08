@@ -11,27 +11,59 @@
 #include <vulkan/vulkan_core.h>
 
 
+void SimpleShadowmapRender::CopyBuffer(VkBuffer srcBuffer, VkBuffer dstBuffer, VkDeviceSize size)
+{
+  VkCommandBuffer cmdBuf = vk_utils::createCommandBuffers(m_context->getDevice(), m_commandPool, 1).front();
+
+  VkCommandBufferBeginInfo beginInfo{};
+  beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
+  beginInfo.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
+  VK_CHECK_RESULT(vkBeginCommandBuffer(cmdBuf, &beginInfo));
+
+  VkBufferCopy copyRegion{};
+  copyRegion.srcOffset = 0;
+  copyRegion.dstOffset = 0;
+  copyRegion.size = size;
+  vkCmdCopyBuffer(cmdBuf, srcBuffer, dstBuffer, 1, &copyRegion);
+
+  VK_CHECK_RESULT(vkEndCommandBuffer(cmdBuf));
+
+  VkSubmitInfo submitInfo{};
+  submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
+  submitInfo.commandBufferCount = 1;
+  submitInfo.pCommandBuffers = &cmdBuf;
+
+  VK_CHECK_RESULT(vkQueueSubmit(m_context->getQueue(), 1, &submitInfo, VK_NULL_HANDLE));
+  VK_CHECK_RESULT(vkQueueWaitIdle(m_context->getQueue()));
+}
+
 /// RESOURCE ALLOCATION
 
 void SimpleShadowmapRender::AllocateResources()
 {
-  mainViewDepth = m_context->createImage(etna::Image::CreateInfo
-  {
-    .extent = vk::Extent3D{m_width, m_height, 1},
-    .name = "main_view_depth",
-    .format = vk::Format::eD32Sfloat,
-    .imageUsage = vk::ImageUsageFlagBits::eDepthStencilAttachment
-  });
-
-  shadowMap = m_context->createImage(etna::Image::CreateInfo
-  {
-    .extent = vk::Extent3D{2048, 2048, 1},
-    .name = "shadow_map",
-    .format = vk::Format::eD16Unorm,
-    .imageUsage = vk::ImageUsageFlagBits::eDepthStencilAttachment | vk::ImageUsageFlagBits::eSampled
-  });
-
   defaultSampler = etna::Sampler(etna::Sampler::CreateInfo{.name = "default_sampler"});
+
+  particles = m_context->createBuffer(etna::Buffer::CreateInfo
+  {
+    .size = sizeof(Particle) * PARTICLE_COUNT,
+    .bufferUsage = vk::BufferUsageFlagBits::eStorageBuffer | vk::BufferUsageFlagBits::eVertexBuffer | vk::BufferUsageFlagBits::eTransferDst,
+    .memoryUsage = VMA_MEMORY_USAGE_GPU_ONLY,
+    .name = "particles"
+  });
+  particlesToSpawn = m_context->createBuffer(etna::Buffer::CreateInfo
+  {
+    .size = sizeof(float),
+    .bufferUsage = vk::BufferUsageFlagBits::eStorageBuffer,
+    .memoryUsage = VMA_MEMORY_USAGE_GPU_ONLY,
+    .name = "particles_to_spawn"
+  });
+  staging = m_context->createBuffer(etna::Buffer::CreateInfo
+  {
+    .size = sizeof(Particle) * PARTICLE_COUNT,
+    .bufferUsage = vk::BufferUsageFlagBits::eTransferSrc,
+    .memoryUsage = VMA_MEMORY_USAGE_CPU_ONLY,
+    .name = "staging"
+  });
   constants = m_context->createBuffer(etna::Buffer::CreateInfo
   {
     .size = sizeof(UniformParams),
@@ -41,28 +73,30 @@ void SimpleShadowmapRender::AllocateResources()
   });
 
   m_uboMappedMem = constants.map();
+
+  m_stagingMappedMem = staging.map();
+  std::vector<Particle> particlesData;
+  particlesData.resize(PARTICLE_COUNT);
+  memcpy(m_stagingMappedMem, particlesData.data(), sizeof(Particle) * PARTICLE_COUNT);
+  staging.unmap();
+
+  // void *particlesToSpawnMapped = particlesToSpawn.map();
+  // float zero = 0;
+  // memcpy(particlesToSpawnMapped, &zero, sizeof(float));
+  // particlesToSpawn.unmap();
+
+  CopyBuffer(staging.get(), particles.get(), sizeof(Particle) * PARTICLE_COUNT);
 }
 
 void SimpleShadowmapRender::LoadScene(const char* path, bool transpose_inst_matrices)
 {
-  m_pScnMgr->LoadSceneXML(path, transpose_inst_matrices);
-
   // TODO: Make a separate stage
   loadShaders();
   PreparePipelines();
-
-  auto loadedCam = m_pScnMgr->GetCamera(0);
-  m_cam.fov = loadedCam.fov;
-  m_cam.pos = float3(loadedCam.pos);
-  m_cam.up  = float3(loadedCam.up);
-  m_cam.lookAt = float3(loadedCam.lookAt);
-  m_cam.tdist  = loadedCam.farPlane;
 }
 
 void SimpleShadowmapRender::DeallocateResources()
 {
-  mainViewDepth.reset(); // TODO: Make an etna method to reset all the resources
-  shadowMap.reset();
   m_swapchain.Cleanup();
   vkDestroySurfaceKHR(GetVkInstance(), m_surface, nullptr);  
 
@@ -77,78 +111,53 @@ void SimpleShadowmapRender::DeallocateResources()
 
 void SimpleShadowmapRender::PreparePipelines()
 {
-  // create full screen quad for debug purposes
-  // 
-  m_pQuad = std::make_unique<QuadRenderer>(QuadRenderer::CreateInfo{ 
-      .format = static_cast<vk::Format>(m_swapchain.GetFormat()),
-      .rect = { 0, 0, 512, 512 }, 
-    });
-  SetupSimplePipeline();
+  SetupPipelines();
 }
 
 void SimpleShadowmapRender::loadShaders()
 {
-  etna::create_program("simple_material",
-    {VK_GRAPHICS_BASIC_ROOT"/resources/shaders/simple_shadow.frag.spv", VK_GRAPHICS_BASIC_ROOT"/resources/shaders/simple.vert.spv"});
-  etna::create_program("simple_shadow", {VK_GRAPHICS_BASIC_ROOT"/resources/shaders/simple.vert.spv"});
+  etna::create_program("particles_graphics", 
+  {
+    VK_GRAPHICS_BASIC_ROOT"/resources/shaders/particles.vert.spv",
+    VK_GRAPHICS_BASIC_ROOT"/resources/shaders/particles.frag.spv"
+  });
+  etna::create_program("particles_create",
+  {
+    VK_GRAPHICS_BASIC_ROOT"/resources/shaders/particles_create.comp.spv"
+  });
+  etna::create_program("particles_update",
+  {
+    VK_GRAPHICS_BASIC_ROOT"/resources/shaders/particles_update.comp.spv"
+  });
 }
 
-void SimpleShadowmapRender::SetupSimplePipeline()
+void SimpleShadowmapRender::SetupPipelines()
 {
-  etna::VertexShaderInputDescription sceneVertexInputDesc
-    {
-      .bindings = {etna::VertexShaderInputDescription::Binding
-        {
-          .byteStreamDescription = m_pScnMgr->GetVertexStreamDescription()
-        }}
-    };
-
   auto& pipelineManager = etna::get_context().getPipelineManager();
-  m_basicForwardPipeline = pipelineManager.createGraphicsPipeline("simple_material",
-    {
-      .vertexShaderInput = sceneVertexInputDesc,
-      .fragmentShaderOutput =
-        {
-          .colorAttachmentFormats = {static_cast<vk::Format>(m_swapchain.GetFormat())},
-          .depthAttachmentFormat = vk::Format::eD32Sfloat
-        }
-    });
-  m_shadowPipeline = pipelineManager.createGraphicsPipeline("simple_shadow",
-    {
-      .vertexShaderInput = sceneVertexInputDesc,
-      .fragmentShaderOutput =
-        {
-          .depthAttachmentFormat = vk::Format::eD16Unorm
-        }
-    });
-}
 
+  std::vector<etna::VertexByteStreamFormatDescription::Attribute> attributes = {
+    { .format = vk::Format::eR32G32Sfloat, .offset = offsetof(Particle, pos) },
+    { .format = vk::Format::eR32Sfloat, .offset = offsetof(Particle, remainingLifetime) },
+  };
+
+  etna::VertexShaderInputDescription pointInputDesc
+  {
+    .bindings = { etna::VertexShaderInputDescription::Binding {
+      .byteStreamDescription = { .stride = sizeof(Particle), .attributes = attributes }
+    }}
+  };
+
+  m_graphicsPipeline = pipelineManager.createGraphicsPipeline("particles_graphics", 
+  {
+    .vertexShaderInput = pointInputDesc,
+    .inputAssemblyConfig = { .topology = vk::PrimitiveTopology::ePointList },
+  });
+
+  m_computeCreatePipeline = pipelineManager.createComputePipeline("particles_create", { });
+  m_computeUpdatePipeline = pipelineManager.createComputePipeline("particles_update", { });
+}
 
 /// COMMAND BUFFER FILLING
-
-void SimpleShadowmapRender::DrawSceneCmd(VkCommandBuffer a_cmdBuff, const float4x4& a_wvp, VkPipelineLayout a_pipelineLayout)
-{
-  VkShaderStageFlags stageFlags = (VK_SHADER_STAGE_VERTEX_BIT);
-
-  VkDeviceSize zero_offset = 0u;
-  VkBuffer vertexBuf = m_pScnMgr->GetVertexBuffer();
-  VkBuffer indexBuf  = m_pScnMgr->GetIndexBuffer();
-  
-  vkCmdBindVertexBuffers(a_cmdBuff, 0, 1, &vertexBuf, &zero_offset);
-  vkCmdBindIndexBuffer(a_cmdBuff, indexBuf, 0, VK_INDEX_TYPE_UINT32);
-
-  pushConst2M.projView = a_wvp;
-  for (uint32_t i = 0; i < m_pScnMgr->InstancesNum(); ++i)
-  {
-    auto inst         = m_pScnMgr->GetInstanceInfo(i);
-    pushConst2M.model = m_pScnMgr->GetInstanceMatrix(i);
-    vkCmdPushConstants(a_cmdBuff, a_pipelineLayout,
-      stageFlags, 0, sizeof(pushConst2M), &pushConst2M);
-
-    auto mesh_info = m_pScnMgr->GetMeshInfo(inst.mesh_id);
-    vkCmdDrawIndexed(a_cmdBuff, mesh_info.m_indNum, 1, mesh_info.m_indexOffset, mesh_info.m_vertexOffset, 0);
-  }
-}
 
 void SimpleShadowmapRender::BuildCommandBufferSimple(VkCommandBuffer a_cmdBuff, VkImage a_targetImage, VkImageView a_targetImageView)
 {
@@ -160,41 +169,60 @@ void SimpleShadowmapRender::BuildCommandBufferSimple(VkCommandBuffer a_cmdBuff, 
 
   VK_CHECK_RESULT(vkBeginCommandBuffer(a_cmdBuff, &beginInfo));
 
-  //// draw scene to shadowmap
-  //
+  // create particles
   {
-    etna::RenderTargetState renderTargets(a_cmdBuff, {0, 0, 2048, 2048}, {}, {.image = shadowMap.get(), .view = shadowMap.getView({})});
-
-    vkCmdBindPipeline(a_cmdBuff, VK_PIPELINE_BIND_POINT_GRAPHICS, m_shadowPipeline.getVkPipeline());
-    DrawSceneCmd(a_cmdBuff, m_lightMatrix, m_shadowPipeline.getVkPipelineLayout());
-  }
-
-  //// draw final scene to screen
-  //
-  {
-    auto simpleMaterialInfo = etna::get_shader_program("simple_material");
-
-    auto set = etna::create_descriptor_set(simpleMaterialInfo.getDescriptorLayoutId(0), a_cmdBuff,
+    auto particlesComputeInfo = etna::get_shader_program("particles_create");
+    auto set = etna::create_descriptor_set(particlesComputeInfo.getDescriptorLayoutId(0), a_cmdBuff, 
     {
-      etna::Binding {0, constants.genBinding()},
-      etna::Binding {1, shadowMap.genBinding(defaultSampler.get(), vk::ImageLayout::eShaderReadOnlyOptimal)}
+      etna::Binding {0, particles.genBinding()},
+      etna::Binding {1, constants.genBinding()},
+      etna::Binding {2, particlesToSpawn.genBinding()},
     });
-
     VkDescriptorSet vkSet = set.getVkSet();
 
-    etna::RenderTargetState renderTargets(a_cmdBuff, {0, 0, m_width, m_height},
-      {{.image = a_targetImage, .view = a_targetImageView}},
-      {.image = mainViewDepth.get(), .view = mainViewDepth.getView({})});
+    vkCmdBindPipeline(a_cmdBuff, VK_PIPELINE_BIND_POINT_COMPUTE, m_computeCreatePipeline.getVkPipeline());
+    vkCmdBindDescriptorSets(a_cmdBuff, VK_PIPELINE_BIND_POINT_COMPUTE, m_computeCreatePipeline.getVkPipelineLayout(),
+      0, 1, &vkSet, 0, VK_NULL_HANDLE);
 
-    vkCmdBindPipeline(a_cmdBuff, VK_PIPELINE_BIND_POINT_GRAPHICS, m_basicForwardPipeline.getVkPipeline());
-    vkCmdBindDescriptorSets(a_cmdBuff, VK_PIPELINE_BIND_POINT_GRAPHICS,
-      m_basicForwardPipeline.getVkPipelineLayout(), 0, 1, &vkSet, 0, VK_NULL_HANDLE);
-
-    DrawSceneCmd(a_cmdBuff, m_worldViewProj, m_basicForwardPipeline.getVkPipelineLayout());
+    vkCmdDispatch(a_cmdBuff, 1, 1, 1);
   }
 
-  if(m_input.drawFSQuad)
-    m_pQuad->RecordCommands(a_cmdBuff, a_targetImage, a_targetImageView, shadowMap, defaultSampler);
+  // update particles
+  {
+    auto particlesComputeInfo = etna::get_shader_program("particles_update");
+    auto set = etna::create_descriptor_set(particlesComputeInfo.getDescriptorLayoutId(0), a_cmdBuff, 
+    {
+      etna::Binding {0, particles.genBinding()},
+      etna::Binding {1, constants.genBinding()}
+    });
+    VkDescriptorSet vkSet = set.getVkSet();
+
+    vkCmdBindPipeline(a_cmdBuff, VK_PIPELINE_BIND_POINT_COMPUTE, m_computeUpdatePipeline.getVkPipeline());
+    vkCmdBindDescriptorSets(a_cmdBuff, VK_PIPELINE_BIND_POINT_COMPUTE, m_computeUpdatePipeline.getVkPipelineLayout(),
+      0, 1, &vkSet, 0, VK_NULL_HANDLE);
+
+    vkCmdDispatch(a_cmdBuff, PARTICLE_COUNT / 256, 1, 1);
+  }
+
+  // render particles
+  { 
+    // set render target
+    etna::RenderTargetState renderTargets(a_cmdBuff, {0, 0, m_width, m_height}, 
+      { {.image = a_targetImage, .view = a_targetImageView} }, // color attachment
+      { }                                                      // depth attachment
+    );
+
+    // bind pipeline
+    vkCmdBindPipeline(a_cmdBuff, VK_PIPELINE_BIND_POINT_GRAPHICS, m_graphicsPipeline.getVkPipeline());
+
+    // bind vertex buffers
+    VkDeviceSize offsets[1] = { 0 };
+    VkBuffer vertexBuffer = particles.get();
+    vkCmdBindVertexBuffers(a_cmdBuff, 0, 1, &vertexBuffer, offsets);
+
+    // draw
+    vkCmdDraw(a_cmdBuff, PARTICLE_COUNT, 1, 0, 0);
+  }
 
   etna::set_state(a_cmdBuff, a_targetImage, vk::PipelineStageFlagBits2::eBottomOfPipe,
     vk::AccessFlags2(), vk::ImageLayout::ePresentSrcKHR,

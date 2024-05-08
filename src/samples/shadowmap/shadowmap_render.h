@@ -18,6 +18,7 @@
 #include <etna/GlobalContext.hpp>
 #include <etna/Sampler.hpp>
 
+#define PARTICLE_COUNT 256 * 128
 
 class IRenderGUI;
 
@@ -45,9 +46,10 @@ public:
 
 private:
   etna::GlobalContext* m_context;
-  etna::Image mainViewDepth;
-  etna::Image shadowMap;
   etna::Sampler defaultSampler;
+  etna::Buffer particles;
+  etna::Buffer particlesToSpawn;
+  etna::Buffer staging;
   etna::Buffer constants;
 
   VkCommandPool    m_commandPool    = VK_NULL_HANDLE;
@@ -63,6 +65,13 @@ private:
   std::vector<VkFence> m_frameFences;
   std::vector<VkCommandBuffer> m_cmdBuffersDrawMain;
 
+  struct Particle
+  {
+    float2 pos = float2(0.0f, 0.0f);
+    float2 vel = float2(0.0f, 0.0f);
+    alignas(16) float remainingLifetime = 0.0f;
+  };
+
   struct
   {
     float4x4 projView;
@@ -72,11 +81,13 @@ private:
   float4x4 m_worldViewProj;
   float4x4 m_lightMatrix;    
 
-  UniformParams m_uniforms {};
+  UniformParams m_uniforms { .dt = 0.0f, .spawnRate = 10.0f, .particlesCount = PARTICLE_COUNT };
   void* m_uboMappedMem = nullptr;
+  void* m_stagingMappedMem = nullptr;
 
-  etna::GraphicsPipeline m_basicForwardPipeline {};
-  etna::GraphicsPipeline m_shadowPipeline {};
+  etna::GraphicsPipeline m_graphicsPipeline {};
+  etna::ComputePipeline m_computeCreatePipeline {};
+  etna::ComputePipeline m_computeUpdatePipeline {};
   
   VkSurfaceKHR m_surface = VK_NULL_HANDLE;
   VulkanSwapChain m_swapchain;
@@ -128,17 +139,17 @@ private:
 
   void BuildCommandBufferSimple(VkCommandBuffer a_cmdBuff, VkImage a_targetImage, VkImageView a_targetImageView);
 
-  void DrawSceneCmd(VkCommandBuffer a_cmdBuff, const float4x4& a_wvp, VkPipelineLayout a_pipelineLayout = VK_NULL_HANDLE);
-
   void loadShaders();
 
-  void SetupSimplePipeline();
+  void SetupPipelines();
   void RecreateSwapChain();
 
   void UpdateUniformBuffer(float a_time);
 
 
   void SetupDeviceExtensions();
+
+  void CopyBuffer(VkBuffer srcBuffer, VkBuffer dstBuffer, VkDeviceSize size);
 
   void AllocateResources();
   void PreparePipelines();

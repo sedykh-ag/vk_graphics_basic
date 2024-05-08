@@ -1,0 +1,54 @@
+#version 450
+#extension GL_GOOGLE_include_directive : require
+
+#include "common.h"
+
+layout(local_size_x = 1) in;
+
+struct Particle
+{
+  vec2 pos;
+  vec2 vel;
+  float remainingLifetime;
+};
+
+layout(std140, binding = 0) buffer PARTICLES
+{
+  Particle particles[ ];
+};
+
+layout(std140, binding = 2) buffer PARTICLES_TO_SPAWN
+{
+  float numToSpawn;
+};
+
+layout(binding = 1) uniform UBO
+{
+  UniformParams ubo;
+};
+
+float rand_singed(float co){
+  return fract(sin(dot(vec2(co, 1.0), vec2(12.9898, 78.233))) * 43758.5453) * 2.0f - 1.0f;
+}
+
+float rand_unsinged(float co){
+  return fract(sin(dot(vec2(co, 1.0), vec2(12.9898, 78.233))) * 43758.5453);
+}
+
+void main()
+{
+  if (numToSpawn > 10.0f)
+    numToSpawn = 0.0f;
+
+  numToSpawn += ubo.spawnRate * ubo.dt;
+  for (int i = 0; numToSpawn >= 1.0f && i < ubo.particlesCount; i++)
+  {
+    if (particles[i].remainingLifetime > 0.0f)
+      continue;
+
+    particles[i].remainingLifetime = rand_unsinged(i + ubo.time) * 5.0f;
+    particles[i].pos = vec2(rand_singed(i + ubo.time + 1.0f), rand_singed(i + ubo.time + 2.0f));
+    particles[i].vel = vec2(rand_singed(i + ubo.time + 3.0f), rand_singed(i + ubo.time + 4.0f)) * 0.1f;
+    numToSpawn -= 1.0f;
+  }
+}
